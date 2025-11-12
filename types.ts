@@ -1,6 +1,13 @@
 
-export interface Kost {
+
+export interface Account {
   id: string;
+  username: string;
+  password: string;
+}
+
+export interface Kost {
+  id:string;
   name: string;
   area: string; // e.g., 'Lowokwaru', 'Klojen'
   address: string;
@@ -32,4 +39,6 @@ export interface HistoryLog {
   details?: string;
   previousState?: Kost;
   isRestored?: boolean;
+  accountId: string;
+  username: string;
 }

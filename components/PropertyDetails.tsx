@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import type { Kost } from '../types';
 import { ArrowLeftIcon, ChevronLeftIcon, ChevronRightIcon, MapPinIcon, StarIcon, TrashIcon, PencilIcon, UserGroupIcon, UserIcon } from './icons';
-import { CAMPUSES, FACILITIES } from '../constants';
 
 interface PropertyDetailsProps {
     kost?: Kost;
@@ -9,9 +8,11 @@ interface PropertyDetailsProps {
     isAdmin: boolean;
     onSubmit: (data: Omit<Kost, 'id'> & { id?: string }) => void;
     mode: 'view' | 'edit' | 'new';
+    campuses: string[];
+    facilities: string[];
 }
 
-const PropertyDetails: React.FC<PropertyDetailsProps> = ({ kost, onBack, isAdmin, onSubmit, mode }) => {
+const PropertyDetails: React.FC<PropertyDetailsProps> = ({ kost, onBack, isAdmin, onSubmit, mode, campuses, facilities }) => {
     const [currentImageIndex, setCurrentImageIndex] = useState(0);
     const [isEditing, setIsEditing] = useState(mode === 'edit' || mode === 'new');
     const [hoverRating, setHoverRating] = useState<number | null>(null);
@@ -56,7 +57,7 @@ const PropertyDetails: React.FC<PropertyDetailsProps> = ({ kost, onBack, isAdmin
     const displayData = isEditing ? {
       ...formData,
       rating: formData.rating,
-      gender: formData.gender
+      gender: formData.gender,
     } : kost;
 
     const formatPrice = (value: number) => {
@@ -91,31 +92,81 @@ const PropertyDetails: React.FC<PropertyDetailsProps> = ({ kost, onBack, isAdmin
     const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (!e.target.files) return;
         const filesArray = Array.from(e.target.files);
-        // FIX: Explicitly type the 'file' parameter as 'File' to resolve a TypeScript
-        // type inference issue that caused an error when passing it to readAsDataURL.
-        const fileReadingPromises = filesArray.map((file: File) => {
-            return new Promise<string>((resolve, reject) => {
+
+        const MAX_WIDTH = 1024;
+        const MAX_HEIGHT = 1024;
+        const QUALITY = 0.7; // For JPEG compression
+
+        const resizeAndCompressImage = (file: File): Promise<string> => {
+            return new Promise((resolve, reject) => {
                 const reader = new FileReader();
-                reader.onload = () => {
-                    if (typeof reader.result === 'string') {
-                        resolve(reader.result);
-                    } else {
-                        reject(new Error('Error reading file data.'));
+                reader.onload = (event) => {
+                    if (typeof event.target?.result !== 'string') {
+                        return reject(new Error('FileReader did not return a string.'));
                     }
+
+                    const img = new Image();
+                    img.onload = () => {
+                        const canvas = document.createElement('canvas');
+                        let { width, height } = img;
+
+                        if (width > height) {
+                            if (width > MAX_WIDTH) {
+                                height = Math.round(height * (MAX_WIDTH / width));
+                                width = MAX_WIDTH;
+                            }
+                        } else {
+                            if (height > MAX_HEIGHT) {
+                                width = Math.round(width * (MAX_HEIGHT / height));
+                                height = MAX_HEIGHT;
+                            }
+                        }
+
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        if (!ctx) {
+                            return reject(new Error('Failed to get canvas context.'));
+                        }
+
+                        ctx.drawImage(img, 0, 0, width, height);
+                        const compressedBase64 = canvas.toDataURL('image/jpeg', QUALITY);
+                        resolve(compressedBase64);
+                    };
+                    img.onerror = (err) => reject(err);
+                    img.src = event.target.result;
                 };
-                reader.onerror = reject;
+                reader.onerror = (err) => reject(err);
                 reader.readAsDataURL(file);
             });
-        });
+        };
 
-        Promise.all(fileReadingPromises).then((base64files) => {
-            setFormData((prev) => ({
-                ...prev,
-                imageUrls: [...prev.imageUrls, ...base64files],
-            }));
-        }).catch(error => console.error("Error reading files:", error));
-        e.target.value = '';
+        const imageProcessingPromises = filesArray.map(file => 
+            resizeAndCompressImage(file).catch(error => {
+                console.error(`Failed to process image ${file.name}:`, error);
+                return null; // Return null for failed images
+            })
+        );
+
+        Promise.all(imageProcessingPromises).then((base64results) => {
+            const successfulUploads = base64results.filter((result): result is string => result !== null);
+            if (successfulUploads.length < base64results.length) {
+                alert('Beberapa gambar gagal diproses. Silakan coba lagi atau gunakan gambar lain.');
+            }
+            if (successfulUploads.length > 0) {
+                setFormData((prev) => ({
+                    ...prev,
+                    imageUrls: [...prev.imageUrls, ...successfulUploads],
+                }));
+            }
+        }).finally(() => {
+            // Reset file input to allow uploading the same file again
+            if (e.target) {
+                e.target.value = '';
+            }
+        });
     };
+
 
     const handleRemoveImage = (indexToRemove: number) => {
         setFormData((prev) => ({
@@ -171,6 +222,7 @@ const PropertyDetails: React.FC<PropertyDetailsProps> = ({ kost, onBack, isAdmin
         }
     };
     const GenderIcon = displayData?.gender === 'Campur' ? UserGroupIcon : UserIcon;
+    const mapSrc = `https://maps.google.com/maps?q=${encodeURIComponent(displayData?.address || 'Malang')}&t=&z=15&ie=UTF8&iwloc=&output=embed`;
 
 
     if (!displayData && !isNew) return <p>Loading...</p>
@@ -188,7 +240,7 @@ const PropertyDetails: React.FC<PropertyDetailsProps> = ({ kost, onBack, isAdmin
                 {isAdmin && !isEditing && kost && (
                      <button
                         type="button"
-                        onClick={() => window.location.hash = `#/admin/edit/${kost.id}`}
+                        onClick={() => window.location.hash = `#/admin/edit/${kost.id}?from=${encodeURIComponent(window.location.hash.substring(1))}`}
                         className="bg-blue-600 text-white rounded-full p-3 shadow-lg hover:bg-blue-700 transition-transform transform hover:scale-110 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
                         aria-label="Edit Properti"
                     >
@@ -386,10 +438,25 @@ const PropertyDetails: React.FC<PropertyDetailsProps> = ({ kost, onBack, isAdmin
                                     <p className="text-gray-700 leading-relaxed mb-6">{displayData.description}</p>
                                 )}
                                 
+                                {displayData.address && (
+                                <div className="my-6">
+                                    <h3 className="text-lg font-semibold text-gray-800 mb-3">Lokasi di Peta</h3>
+                                    <div className="aspect-video bg-gray-200 rounded-lg overflow-hidden shadow">
+                                        <iframe
+                                            key={displayData.address}
+                                            className="w-full h-full border-0"
+                                            loading="lazy"
+                                            allowFullScreen
+                                            src={mapSrc}>
+                                        </iframe>
+                                    </div>
+                                </div>
+                                )}
+                                
                                 <div className="mb-6">
                                     <h3 className="text-lg font-semibold text-gray-800 mb-3">Fasilitas</h3>
                                     <div className="grid grid-cols-2 gap-2 text-gray-600">
-                                        { (isEditing ? FACILITIES : displayData.facilities).map(facility => (
+                                        { (isEditing ? facilities : displayData.facilities).map(facility => (
                                             isEditing ? (
                                                 <div key={facility} className="flex items-center">
                                                     <input id={`facility-${facility}`} type="checkbox" checked={formData.facilities.includes(facility)} onChange={() => handleCheckboxChange('facilities', facility)} className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />
@@ -407,7 +474,7 @@ const PropertyDetails: React.FC<PropertyDetailsProps> = ({ kost, onBack, isAdmin
                                 <div>
                                     <h3 className="text-lg font-semibold text-gray-800 mb-3">Kampus Terdekat</h3>
                                     <div className="flex flex-wrap gap-2">
-                                        { (isEditing ? CAMPUSES : displayData.nearbyCampuses).map(campus => (
+                                        { (isEditing ? campuses : displayData.nearbyCampuses).map(campus => (
                                             isEditing ? (
                                                 <div key={campus} className="flex items-center">
                                                     <input id={`campus-${campus}`} type="checkbox" checked={formData.nearbyCampuses.includes(campus)} onChange={() => handleCheckboxChange('nearbyCampuses', campus)} className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500" />
@@ -421,16 +488,22 @@ const PropertyDetails: React.FC<PropertyDetailsProps> = ({ kost, onBack, isAdmin
                                 </div>
                                 {isEditing && (
                                     <div className="mt-6">
-                                        <label htmlFor="contactLink" className="block text-sm font-medium text-gray-700 mb-1">Link WhatsApp Pemilik</label>
-                                        <input
-                                            type="url"
-                                            name="contactLink"
-                                            id="contactLink"
-                                            value={formData.contactLink}
-                                            onChange={handleChange}
-                                            placeholder="https://wa.me/628123..."
-                                            className="w-full bg-white text-gray-900 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500"
-                                        />
+                                        <label htmlFor="contactLink" className="block text-sm font-medium text-gray-700 mb-1">Nomor WhatsApp Pemilik</label>
+                                        <div className="mt-1">
+                                            <input
+                                                type="tel"
+                                                name="contactLink"
+                                                id="contactLink"
+                                                value={formData.contactLink.replace('https://wa.me/', '')}
+                                                onChange={(e) => {
+                                                    const numberOnly = e.target.value.replace(/\D/g, ''); // Allow only digits
+                                                    setFormData(prev => ({...prev, contactLink: `https://wa.me/${numberOnly}`}));
+                                                }}
+                                                placeholder="628123456789"
+                                                className="w-full bg-white text-gray-900 border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                            />
+                                        </div>
+                                        <p className="mt-2 text-xs text-gray-500">Hanya masukkan nomor, contoh: 6281234567890</p>
                                     </div>
                                 )}
                             </div>
@@ -451,24 +524,26 @@ const PropertyDetails: React.FC<PropertyDetailsProps> = ({ kost, onBack, isAdmin
                                         Simpan Perubahan
                                     </button>
                                 ) : (
-                                    displayData.contactLink ? (
-                                        <a
-                                            href={displayData.contactLink}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="block text-center w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition duration-300 shadow-lg text-lg"
-                                        >
-                                            Hubungi Pemilik
-                                        </a>
-                                    ) : (
-                                        <button
-                                            type="button"
-                                            disabled
-                                            className="w-full bg-gray-400 text-white font-bold py-3 px-4 rounded-lg cursor-not-allowed shadow-lg text-lg"
-                                        >
-                                            Kontak Tidak Tersedia
-                                        </button>
-                                    )
+                                    <>
+                                        {displayData.contactLink && displayData.contactLink.replace('https://wa.me/', '').length > 0 ? (
+                                            <a
+                                                href={displayData.contactLink}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                                className="block text-center w-full bg-blue-600 text-white font-bold py-3 px-4 rounded-lg hover:bg-blue-700 transition duration-300 shadow-lg text-lg"
+                                            >
+                                                Hubungi Pemilik
+                                            </a>
+                                        ) : (
+                                            <button
+                                                type="button"
+                                                disabled
+                                                className="w-full bg-gray-400 text-white font-bold py-3 px-4 rounded-lg cursor-not-allowed shadow-lg text-lg"
+                                            >
+                                                Kontak Tidak Tersedia
+                                            </button>
+                                        )}
+                                    </>
                                 )}
                             </div>
                         </div>

@@ -1,6 +1,7 @@
 
 
-import React, { useState } from 'react';
+
+import React, { useState, useEffect } from 'react';
 import type { HistoryLog } from '../types';
 import { PencilIcon, TrashIcon, EyeIcon, EyeSlashIcon, CalendarIcon, UndoIcon, HistoryIcon } from './icons';
 
@@ -42,10 +43,25 @@ const timeAgo = (isoDate: string): string => {
     }).format(date);
 }
 
+const getTodayDateString = () => {
+    const today = new Date();
+    // Adjust for timezone offset to get the correct local date
+    const offset = today.getTimezoneOffset();
+    const todayLocal = new Date(today.getTime() - (offset*60*1000));
+    return todayLocal.toISOString().split('T')[0];
+};
+
 
 const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, logs, onRestore }) => {
-  const [selectedDate, setSelectedDate] = useState('');
+  const [selectedDate, setSelectedDate] = useState(getTodayDateString());
   const [searchTerm, setSearchTerm] = useState('');
+
+  useEffect(() => {
+    if (isOpen) {
+        setSelectedDate(getTodayDateString());
+        setSearchTerm('');
+    }
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -54,7 +70,8 @@ const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, logs, onRe
     const term = searchTerm.trim().toLowerCase();
     const searchMatch = term === '' ||
       log.kostName.toLowerCase().includes(term) ||
-      (log.details && log.details.toLowerCase().includes(term));
+      (log.details && log.details.toLowerCase().includes(term)) ||
+      log.username.toLowerCase().includes(term);
 
     if (!searchMatch) return false;
 
@@ -107,7 +124,7 @@ const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, logs, onRe
                     <input 
                         type="text" 
                         id="searchTerm"
-                        placeholder="Nama kost, detail..."
+                        placeholder="Nama kost, detail, user..."
                         value={searchTerm}
                         onChange={e => setSearchTerm(e.target.value)}
                         className="w-full p-2 border border-gray-300 rounded-md shadow-sm text-sm focus:ring-blue-500 focus:border-blue-500"
@@ -160,7 +177,7 @@ const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, logs, onRe
                                                 <span className="font-medium">{log.kostName}</span>
                                                 {log.details && <span className="text-gray-500"> - {log.details}</span>}
                                             </p>
-                                            <p className="text-xs text-gray-400 mt-1">{timeAgo(log.timestamp)}</p>
+                                            <p className="text-xs text-gray-400 mt-1">{timeAgo(log.timestamp)} oleh <span className="font-medium">{log.username}</span></p>
                                         </div>
                                     </div>
                                     <div className="flex-shrink-0">
@@ -168,7 +185,7 @@ const HistoryModal: React.FC<HistoryModalProps> = ({ isOpen, onClose, logs, onRe
                                             <span className="text-xs font-semibold text-indigo-700 bg-indigo-100 px-2 py-1 rounded-full whitespace-nowrap">
                                                 Dikembalikan
                                             </span>
-                                        ) : (log.action !== 'restore' && log.action !== 'archive' && log.action !== 'unarchive') && (
+                                        ) : (log.action !== 'restore') && (
                                             <button
                                                 onClick={() => onRestore(log)}
                                                 className="opacity-0 group-hover:opacity-100 transition p-1.5 text-gray-500 rounded-md hover:bg-gray-200 hover:text-gray-700"

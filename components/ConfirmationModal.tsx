@@ -1,3 +1,4 @@
+
 import React from 'react';
 
 interface ConfirmationModalProps {
@@ -8,10 +9,24 @@ interface ConfirmationModalProps {
   onCancel: () => void;
   confirmText?: string;
   cancelText?: string;
+  confirmButtonVariant?: 'danger' | 'primary';
 }
 
-const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, title, message, onConfirm, onCancel, confirmText = 'Hapus', cancelText = 'Batal' }) => {
+const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ 
+  isOpen, 
+  title, 
+  message, 
+  onConfirm, 
+  onCancel, 
+  confirmText = 'Hapus', 
+  cancelText = 'Batal',
+  confirmButtonVariant = 'danger'
+}) => {
   if (!isOpen) return null;
+
+  const confirmButtonClass = confirmButtonVariant === 'danger'
+    ? 'bg-red-600 hover:bg-red-700 focus:ring-red-500'
+    : 'bg-blue-600 hover:bg-blue-700 focus:ring-blue-500';
 
   return (
     <div 
@@ -39,7 +54,7 @@ const ConfirmationModal: React.FC<ConfirmationModalProps> = ({ isOpen, title, me
           <button
             type="button"
             onClick={onConfirm}
-            className="px-4 py-2 text-sm font-medium text-white bg-red-600 border border-transparent rounded-md shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+            className={`px-4 py-2 text-sm font-medium text-white border border-transparent rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 ${confirmButtonClass}`}
           >
             {confirmText}
           </button>

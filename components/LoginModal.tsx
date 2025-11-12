@@ -1,25 +1,30 @@
+
+
 import React, { useState, useRef, useEffect } from 'react';
 
 interface LoginModalProps {
   onClose: () => void;
-  onLogin: (password: string) => boolean; // Returns true on success
+  onLogin: (username: string, password: string) => boolean; // Returns true on success
+  title?: string;
+  description?: string;
 }
 
-const LoginModal: React.FC<LoginModalProps> = ({ onClose, onLogin }) => {
+const LoginModal: React.FC<LoginModalProps> = ({ onClose, onLogin, title, description }) => {
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const passwordInputRef = useRef<HTMLInputElement>(null);
+  const usernameInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    passwordInputRef.current?.focus();
+    usernameInputRef.current?.focus();
   }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
-    const success = onLogin(password);
+    const success = onLogin(username, password);
     if (!success) {
-      setError('Password salah. Coba lagi.');
+      setError('Username atau password salah. Coba lagi.');
       setPassword('');
     }
   };
@@ -35,13 +40,27 @@ const LoginModal: React.FC<LoginModalProps> = ({ onClose, onLogin }) => {
         className="bg-white rounded-lg shadow-2xl p-8 w-full max-w-sm m-4 transform transition-all"
         onClick={e => e.stopPropagation()}
       >
-        <h2 className="text-2xl font-bold text-center text-gray-800 mb-2">Admin Login</h2>
-        <p className="text-center text-gray-500 mb-6">Masukkan password untuk mengelola properti.</p>
-        <form onSubmit={handleSubmit}>
-          <div className="mb-4">
+        <h2 className="text-2xl font-bold text-center text-gray-800 mb-2">{title || 'Admin Login'}</h2>
+        <p className="text-center text-gray-500 mb-6">{description || 'Masukkan kredensial untuk mengelola properti.'}</p>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label htmlFor="username" className="sr-only">Username</label>
+            <input
+              ref={usernameInputRef}
+              id="username"
+              name="username"
+              type="text"
+              autoComplete="username"
+              required
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="appearance-none rounded-md relative block w-full px-3 py-3 border border-gray-300 placeholder-gray-500 text-gray-900 focus:outline-none focus:ring-blue-500 focus:border-blue-500 focus:z-10 sm:text-sm"
+              placeholder="Username"
+            />
+          </div>
+          <div>
             <label htmlFor="password" className="sr-only">Password</label>
             <input
-              ref={passwordInputRef}
               id="password"
               name="password"
               type="password"
@@ -62,7 +81,7 @@ const LoginModal: React.FC<LoginModalProps> = ({ onClose, onLogin }) => {
               Sign in
             </button>
           </div>
-          <p className="text-center text-gray-400 text-xs mt-4">Hint: admin123</p>
+          {title === undefined && <p className="text-center text-gray-400 text-xs mt-4">Hint: admin / admin123</p>}
         </form>
       </div>
     </div>
